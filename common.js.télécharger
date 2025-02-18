@@ -1,0 +1,1853 @@
+// Date Time update 
+function refreshDateMatch() {
+
+    document.querySelectorAll('.match-link').forEach(function (el) {
+        dayjs.locale(el.getAttribute('locale'));
+        var date = dayjs(el.getAttribute('starttime'));
+        var status = el.getAttribute('data-status');
+        var home = $("#livescore").length > 0 ? true : false;
+        var header = $("div.marker div:first").length;
+
+        el.querySelectorAll('.match_hour').forEach(function (el) {
+            el.innerText = date.format('HH:mm');
+        });
+
+        el.querySelectorAll('.hour-transform').forEach(function (el) {
+            el.innerText = date.format('DD MMM YYYY').toUpperCase();
+        });
+
+        el.querySelectorAll('.date-transform').forEach(function (el) {
+            el.innerText = date.format('DD MMM').toUpperCase();
+        });
+
+        el.querySelectorAll('.header-match-date').forEach(function (el) {
+            var year_match = date.format('YYYY');
+            var year = new Date().getFullYear();
+
+            //Si el partido es de este año, mostramos dia y no año
+            if ((status == 1 && header) || status == -1) {
+                if (year == year_match) {
+
+                    //Si no tenemos hora del partido o la pintamos en el marcador
+                    if ($('.header-match-date').hasClass('no-hour')) {
+                        el.innerText = date.format('ddd DD MMM').toUpperCase();
+                    } else {
+                        el.innerText = date.format('ddd DD MMM. HH:mm').toUpperCase();
+                    }
+
+                    //Si el partido es de otro año, no mostramos el día y si el año
+                } else {
+                    if ($('.header-match-date').hasClass('no-hour')) {
+                        el.innerText = date.format('DD MMM YYYY').toUpperCase();
+                    } else {
+                        el.innerText = date.format('DD MMM YYYY. HH:mm').toUpperCase();
+                    }
+                }
+            }
+
+        });
+    });
+    
+}
+
+$('#FBlogin, #FBpopUp').on('click', function () {
+    FB.init({
+        appId: '200183103347113',
+        cookie: true,                     // Enable cookies to allow the server to access the session.
+        xfbml: false,                     // Parse social plugins on this webpage.
+        version: 'v10.0',
+    });
+    const popup = $(this).data('type') == 'popup' ? 1 : 0;
+    var section = $('#section').val() ?? 'login';
+    var nextUrl = $('#url').val() ?? '';
+    FB.login((response) => {
+        if (response.authResponse) {
+            FB.api('/me', { fields: 'name, id, email' }, function (params) {
+
+                $.ajax({
+                    type: "POST",
+                    url: "/auth",
+                    dataype: 'json',
+                    data: {id: params.id, user: params.name, email: params.email, type:'fb'},
+                    success: function(data){
+                        data = JSON.parse(data);
+                        setCookie( 'userName', data?.user?.user_name, 3600 * 24);
+                        setCookie( 'userHash', data?.user?.hash, 3600 * 24);
+                        setCookie( 'userAvatar', data?.user?.avatar, 3600 * 24);
+                        setCookie( 'userEmail', data?.user?.email, 3600 * 24);
+                        setCookie( 'userId', data?.user?.id, 3600 * 24);
+
+                        if ( data?.user?.subscription_web ) {
+                            setCookie( 'subscription', data?.user?.id, data?.user?.subscription_web?.secondsDiff);
+                        }
+                        
+                        if (section === 'payment') {
+                            window.location = nextUrl;
+                        } else if( popup ){
+                            window.location = window.location.href;
+                        } else {
+                            window.location.href = '/';
+                        }
+                    },
+                    error: function (data) {
+                        // console.error("Get Error");
+                    }
+                });
+
+            })
+        }
+    }, { scope: 'email,public_profile', return_scopes: true });
+})
+
+
+function googleLogin(response) {
+
+    $.ajax({
+        type: "POST",
+        url: "/auth",
+        dataype: 'json',
+        data: { credential: response.credential },
+        success: function (data) {
+            var section = $('#section').val() ?? 'login';
+            var nextUrl = $('#url').val() ?? '';
+            data = JSON.parse(data);
+      
+
+            const subscription = data?.user?.subscription_web;
+            const subscriptionEnd = subscription?.secondsDiff;
+           
+            setCookie('userName', data?.user?.user_name, 3600 * 24);
+            setCookie('userHash', data?.user?.hash, 3600 * 24);
+            setCookie('userAvatar', data?.user?.avatar, 3600 * 24);
+            setCookie('userEmail', data?.user?.email, 3600 * 24);
+            setCookie('userId', data?.user?.id, 3600 * 24);
+
+            if ( subscriptionEnd ) {
+                setCookie('subscription', data?.user?.id, subscriptionEnd);
+            }
+
+            if (section === 'payment') {
+                window.location = nextUrl;
+            } else if (window.location.href.indexOf("login") > -1) {
+                window.location = '/';
+            } else {
+                window.location = window.location.href;
+            }
+        },
+        error: function (data) {
+            // console.error("Get Error");
+        }
+    });
+}
+
+refreshDateMatch();
+
+const REFRESH_TIME = 10000; // 1000 = 1s poner 10000
+var updateLivescoresLastCheck = null;
+var updateLivescoresLastCheckCounter = 0;
+var tabTableStyle = "";
+var x0 = null;
+
+$(window).on('scroll', function () {
+    if ($('.aU-5136').length) {
+        var div = $('.aU-5136');
+        var scrollTop = $(window).scrollTop();
+
+        if (scrollTop > 0) {
+            div.addClass('publi-fixed');
+        } else {
+            div.removeClass('publi-fixed');
+        }
+    }
+});
+
+document.addEventListener("visibilitychange", function () {
+    if (
+        document.visibilityState !== "undefined"
+        && document.visibilityState === "visible"
+    ) {
+        updateLiveResults();
+    }
+});
+
+$(document).ready(function () {
+    const hash = getCookieByName('userHash');
+    if (hash) {
+        $('.unloggedFav').addClass('hidden');
+        $('.loggedFav').removeClass('hidden');
+    }
+    $('.starFavorite').removeClass('disabled');
+
+    if ($('#equipo #mod_matches').length) {
+        updateMatchesSelect();
+    }
+
+    resizeContent();
+    tabs();
+    popupGallery();
+    scrollToMatch();
+});
+
+$(window).on('resize', function () {
+    resizeContent();
+});
+
+$(window).on('scroll', function () {
+    fixedWhenScroll();
+});
+
+function resizeContent() {
+    tabSliders();
+    // tabTableShow();
+    recalcFixedScrollValues();
+    video_onmobile();
+}
+
+
+var fixedScroll_nav;
+var fixedScroll_limit;
+
+function recalcFixedScrollValues() {
+    fixedScroll_nav = $('.fixed-w-scroll').find('.head-menu').outerHeight() + parseInt($('.fixed-w-scroll').css("borderBottomWidth"));
+    fixedScroll_limit = $('.fixed-w-scroll').outerHeight() - fixedScroll_nav;
+    $('.row-main').css('padding-top', (fixedScroll_limit + fixedScroll_nav) + 'px');
+    $('.masonry-wrapper').css('padding-top', (fixedScroll_limit + fixedScroll_nav) + 'px');
+}
+
+function fixedWhenScroll() {
+    if ($(window).scrollTop() >= fixedScroll_limit) {
+        $('.fixed-w-scroll').addClass('active');
+        $('.fixed-w-scroll').css('margin-top', -(fixedScroll_limit) + 'px');
+        $('.head-info .select-mobile-green').removeClass('hidden');
+        if ($('.head-info .select-mobile-green').length > 0 && $('.head-info .select-mobile-green').css('display') === 'block') {
+            $('.fixed-w-scroll').css('margin-top', -(fixedScroll_limit - ($('.select-mobile-green').outerHeight())) + 'px');
+        }
+    
+        if($('.side-ads').length > 0) {
+            $('.side-ads .ad-box').css('top', '20%');
+        }
+    } else {
+        $('.fixed-w-scroll').removeClass('active');
+        $('.fixed-w-scroll').css('margin-top', -($(window).scrollTop()) + 'px');
+
+        if($('.side-ads').length > 0) {
+            $('.side-ads .ad-box').css('top', '30%');
+        }
+        // const mediaQuery767 = window.matchMedia('(min-width: 767px)');
+        // if(mediaQuery767.matches) {
+        //     $('.head-info .select-mobile-green').addClass('hidden');
+        // }
+    }
+}
+
+
+function addFunctionsToPopUp() {
+    // Función para los botones de popups
+    document.querySelectorAll('.popup_btn').forEach(function (elem) {
+        elem.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            popup_close();
+            var target = this;
+            var id = target.getAttribute('href');
+            var popup = document.querySelector(id);
+            var body = document.body;
+            if (popup == null) return false;
+            body.classList.add('protect');
+            popup.classList.remove('hidden');
+            disableLinks();
+        });
+    });
+
+    // Botón para cerrar el popup
+    document.querySelectorAll('.popup_close').forEach(function (elem) {
+        elem.addEventListener('click', function (e) {
+            e.preventDefault();
+            popup_close();
+            enableLinks();
+        });
+    });
+
+}
+
+// Función para deshabilitar los enlaces y cambiar el cursor
+function disableLinks() {
+    document.querySelectorAll('a, .menu-box, .btn-switch, .ad-box, .sticky-publi, .preload-videograph, .search-bar, .popup_btn').forEach(function (link) {
+        if (!link.closest('.popup-box')) {
+        link.style.pointerEvents = 'none';
+        link.style.cursor = 'default';
+        }
+    });
+}
+
+// Función para habilitar los enlaces nuevamente
+function enableLinks() {
+    document.querySelectorAll('a, .menu-box, .btn-switch, .ad-box, .sticky-publi, .preload-videograph, .search-bar, .popup_btn').forEach(function (link) {
+        if (!link.closest('.popup-box')) {
+        link.style.pointerEvents = 'auto';
+        link.style.cursor = 'pointer';
+        }
+    });
+}
+
+document.addEventListener('mouseup', function (evt) {
+    const container = document.querySelectorAll('.popup-box:not(.hidden)');
+    if (container) {
+        container.forEach((elem) => {
+            if (elem !== evt.target && !elem.contains(evt.target)) {
+                elem.classList.add('hidden');
+                document.body.classList.remove('protect');
+                enableLinks();
+            }
+        })
+    }
+});
+
+addFunctionsToPopUp();
+
+function popup_close() {
+    document.querySelectorAll('.popup-box:not(.hidden)').forEach(function (elem) {
+        elem.classList.add('hidden');
+        removeClass(document.body, 'protect');
+    });
+    enableLinks();
+}
+
+// Tab de pestañas
+
+function tabTableAction(target) {
+    var tab = target.closest('.tab');
+    var parent = tab.parentNode;
+    for (let sibling of parent.children) {
+        if (sibling.classList.contains('tab')) {
+            sibling.classList.remove('active');
+        }
+    }
+    tab.classList.add('active');
+    tabSliders();
+
+    var id = target.getAttribute('href').replace('#', '');
+    var content = document.querySelectorAll('[data-content-tab=' + id + ']');
+    if (content == null) return false;
+    for (let value of content) {
+        if (typeof value.closest('.tab-table-content') != "undefined") {
+            value.closest('.tab-table-content').setAttribute("data-active-tab", id);
+        }
+    }
+}
+
+let afterClicked = 0;
+function tabs() {
+    document.querySelectorAll('.tab a').forEach(function (elem) {
+        if (!hasClass(elem.closest('.tab'), 'tab-table')) {
+            elem.addEventListener('click', function (e) {
+                var target = this;
+                var id = target.getAttribute('href');
+                if (id.charAt(0) !== "#") {
+                    return;
+                }
+
+                e.preventDefault();
+                changeActiveTab(target);
+                tabSliders();
+                let returnChange = changeActiveTabPanel(id);
+
+                if (!returnChange) {
+                    return returnChange;
+                }
+
+                if (target.hasAttribute('data-together') && afterClicked === 1) {
+                    const regex = /tab_[a-z]{1,}/g;
+                    const found = id.match(regex);
+
+                    if (found[0]) {
+                        document.querySelectorAll('[href*="' + found[0] + '"]').forEach(tabSelected => {
+
+                            changeActiveTab(tabSelected)
+                            tabSliders();
+                            changeActiveTabPanel(tabSelected.getAttribute('href'));
+
+                        });
+                    }
+                }
+
+            });
+        } else {
+            var id = elem.getAttribute('href').replace('#', '');
+            tabTableStyle += ".tab-table-content:not(.tab-table-content-full)[data-active-tab=" + id + "] *[data-content-tab]:not([data-content-tab= " + id + "]) {display:none}";
+            elem.addEventListener('click', function (e) {
+                e.preventDefault();
+                tabTableAction(this);
+            });
+        }
+        if (hasClass(elem.closest('.tab'), 'active') && elem.getAttribute('href').charAt(0) == "#") {
+            elem.click();
+        }
+    });
+
+    if (tabTableStyle !== "") {
+        var style = document.createElement('style');
+        style.type = 'text/css';
+        style.innerHTML = tabTableStyle;
+        document.getElementsByTagName('head')[0].appendChild(style);
+    }
+    afterClicked = 1;
+}
+
+function changeActiveTab(target) {
+    let tab = target.closest('.tab');
+    let parent = tab.parentNode;
+    for (let sibling of parent.children) {
+        if (sibling.classList.contains('tab')) {
+            sibling.classList.remove('active');
+        }
+    }
+    tab.classList.add('active');
+}
+
+function changeActiveTabPanel(id) {
+    let content = document.querySelector(id);
+    if (content == null) {
+        return false;
+    }
+    for (let sibling of content.parentNode.children) {
+        if (sibling.classList.contains('tab-content')) {
+            sibling.classList.remove('active');
+        }
+    }
+    content.classList.add('active');
+    return true;
+}
+
+function tabSliders() {
+    document.querySelectorAll('.panel-tab > .slider').forEach(function (elem) {
+        let bar = elem.querySelector('div');
+        let parent = elem.parentNode;
+        let tabs = parent.querySelectorAll('.tab');
+        let aTab = parent.querySelector('.tab.active');
+        elem.style.width = '0px';
+        elem.style.width = parent.scrollWidth + 'px';
+        bar.style.width = aTab.offsetWidth + 'px';
+        bar.style.left = aTab.offsetLeft + 'px';
+    });
+}
+
+function tabTableShow() {
+    document.querySelectorAll('.tab-table-content:not(.tab_table_content_always_done)').forEach(function (elem) {
+        if (hasClass(elem, 'tab_table_content_always')) {
+            removeClass(elem, 'tab-table-content-full');
+            removeClass(elem, 'tab_table_content_always');
+            addClass(elem, 'tab_table_content_always_done');
+            return false;
+        }
+        var panelWidth = elem.offsetWidth;
+        var tableWidth = 0;
+        addClass(elem, 'tab-table-content-full');
+        elem.querySelectorAll('table').forEach(function (t) {
+            tableWidth = t.offsetWidth > tableWidth ? t.offsetWidth : tableWidth;
+        });
+        const mediaQuery500 = window.matchMedia('(max-width: 500px)');
+        if (tableWidth > panelWidth || mediaQuery500.matches) {
+            removeClass(elem, 'tab-table-content-full');
+        } else {
+            addClass(elem, 'tab-table-content-full');
+        }
+        const mediaQuery767 = window.matchMedia('(min-width: 767px)');
+        if (tableWidth > panelWidth || mediaQuery767.matches) {
+            addClass(elem, 'tab-table-content-full');
+        } else {
+            removeClass(elem, 'tab-table-content-full');
+        }
+        const mediaQuery1920 = window.matchMedia('(min-width: 1920px)');
+        if (tableWidth > panelWidth || mediaQuery1920.matches) {
+            removeClass(elem, 'tab-table-content-full');
+        } else {
+            addClass(elem, 'tab-table-content-full');
+        }
+        if ($(elem).hasClass('tab-table-content-full')) {
+            $('.table-tab-classification').removeClass('tab-table-content-full');
+        }
+
+    });
+}
+
+/*
+ * En una tabla, al pulsar una fila desplegable
+ * muestra u oculta las filas relacionadas y rota la flecha.
+ */
+var hash = window.location.hash;
+if (hash.length > 0) {
+
+    $('.table_parents tbody tr:nth-child(2)').removeClass('active');
+    $('.table_parents tbody tr:nth-child(2)').nextUntil('.parent_row').addClass('hidden');
+    $(hash).addClass('active');
+    $(hash).nextUntil('.parent_row').removeClass('hidden');
+
+    $('html, body').animate({
+        scrollTop: $(hash).offset().top
+    }, 100);
+
+}
+
+$('.table_parents tbody .parent_row').click(showTable);
+
+function showTable() {
+    var rowChilds = $(this).nextUntil('.parent_row');
+    var arrow = $(this).find('.arrow');
+    var displayed = rowChilds.hasClass("hidden");
+    rowChilds.removeClass("hidden");
+    $(this).addClass("active");
+
+    if (typeof $('.grid-container').masonry === "function") {
+        $grid = $('.grid-container').masonry();
+        $grid.masonry('reloadItems');
+        if (!displayed) {
+            $grid.masonry('reloadItems');
+        }
+    }
+    if (!displayed) {
+        rowChilds.toggleClass("hidden");
+        $(this).removeClass("active");
+    }
+}
+
+//Scroll lateral versión mobile
+$(document).ready(function () {
+    if ($('.head-menu .menu-scroll').length > 0) {
+        var position_initial = $('.menu-item').offset();
+        var position = $('.menu-item.active').offset();
+        if (position !== undefined) {
+            $('.menu-scroll').scrollLeft(position.left - position_initial.left);
+        }
+    }
+});
+
+// Para comprobar si el formulario está relleno
+function inputTest(elem) {
+    if ($(elem).val() != 0) {
+        $(elem).addClass('edited');
+    } else {
+        $(elem).removeClass('edited');
+    }
+}
+
+//botón compartir
+$('.share-options .sh-o-btn').click(function (e) {
+    if ($(this).hasClass('sh-o-btn-toggle')) e.preventDefault();
+    $(this).closest('.share-options').toggleClass('active');
+});
+
+$('.copy_url').click(function (e) {
+    var dummy = document.createElement('input'),
+        text = window.location.href;
+
+    document.body.appendChild(dummy);
+    dummy.value = text;
+    dummy.select();
+    document.execCommand('copy');
+    document.body.removeChild(dummy);
+});
+
+function video_onmobile() {
+    if (!($('#video_content').length && $('#video_content_onmobile').length)) return false;
+    if ($(window).outerWidth() <= 1023) {
+        if (!$('#video_content').is(':empty')) {
+            $('#video_content_onmobile').html($('#video_content').html());
+            $('#video_content').html("");
+        }
+    } else {
+        if (!$('#video_content_onmobile').is(':empty')) {
+            $('#video_content').html($('#video_content_onmobile').html());
+            $('#video_content_onmobile').html("");
+        }
+    }
+}
+
+$('.panel-tab > .tab').click(function () {
+    reloadMasonry();
+});
+
+
+//Menús desplegables
+$('.menu-box').click(function (e) {
+    e.stopPropagation();
+    let elem = $(this).find('.box');
+    if (elem.hasClass('hidden')) {
+        $('.menu-box .box').addClass('hidden');
+        elem.removeClass('hidden');
+    } else {
+        elem.addClass('hidden');
+    }
+});
+
+//Cerrar los menús desplegables
+$(document).click(function () {
+    $('.menu-box .box').addClass('hidden');
+});
+
+//PREVIA DE INFOGRAFÍAS
+$('#openVideograph').click(function () {
+    var iframe = $("#foropenVideograph");
+    iframe.attr("src", iframe.data("src"));
+    $('.videograph-wrapper').css('display', 'block');
+    $('.preload-videograph').css('display', 'none');
+});
+
+$("#version-msg-box-ignore").click(function () {
+    Cookies.set('bs-ignore-version-change', 1, { expires: 7 });
+    $("#version-box").fadeOut(250);
+});
+
+//MENSAJE DE COMPROBACIÓN MAYORÍA DE EDAD DE APUESTAS
+// if ( document.querySelector('.bet-age-confirm') && countryCode === 'es' ) {
+//     var cookieBet = Cookies.get('bs-bets-version-change');
+//     if ( ![ '1', '2' ].includes( cookieBet ) ) {
+//         $('.bet-age-confirm').removeClass('hidden');
+//         $('.content').addClass('bet-blur');
+//     } else {
+//         window.ssmCustomTargetings = { adult: cookieBet === '1' ? 'true' : 'false' };
+//     }
+
+//     $('.bet-age-confirm #over18').on('click', function () {
+//         var date = new Date();
+//         var minutos = 60;
+//         date.setTime(date.getTime() + (minutos * 60 * 10000 * 15));
+//         Cookies.set('bs-bets-version-change', 1, { expires: date });
+//         $('.bet-age-confirm').fadeOut(500);
+//         $('*').removeClass('bet-blur');
+//         window.ssmCustomTargetings = { adult: "true"};
+//     });
+
+//     $('.bet-age-confirm #less18').on('click', function () {
+//         var date = new Date();
+//         var minutos = 60;
+//         date.setTime(date.getTime() + (minutos * 60 * 10000));
+//         Cookies.set('bs-bets-version-change', 2, { expires: date });
+//         $('.bet-age-confirm').fadeOut(500);
+//         $('*').removeClass('bet-blur');
+//         window.ssmCustomTargetings = { adult: "false"};
+//     });
+
+
+
+// }
+
+//FILAS DESPLEGABLES
+$('.parent_box .parent_elem').click(function (e) {
+    e.stopPropagation();
+    if ($('.child_box', this).hasClass('hidden')) {
+        $('.child_box', this).removeClass('hidden');
+        $(this).find('.label-text').html("<span class='va-m'>Ver menos</span> <span class='label-icon va-m less'>[-]</span>");
+    } else {
+        $('.child_box', this).addClass('hidden')
+        $(this).find('.label-text').html("<span class='va-m'>Ver más</span> <span class='label-icon va-m'>[+]</span>");
+    }
+    reloadMasonry();
+});
+
+//Cerrar paneles brain
+$('.brain-panel .close-panel').click(function () {
+    $(this).closest('.brain-panel').fadeOut('slow');
+});
+
+
+
+//magnific Popup
+$('.btn_popup').on('click', function (e) {
+    //NOT TESTED YET
+    e.preventDefault();
+    var modalVal = $(this).attr('data-effect');
+    var modalObj = $(this).attr('href');
+
+    // Inline Admin-Form example
+    $.magnificPopup.open({
+        removalDelay: 500, //delay removal by X to allow out-animation,
+        items: {
+            src: modalObj
+        },
+        // overflowY: 'hidden', //
+        callbacks: {
+            beforeOpen: function (e) {
+                var Animation = modalVal;
+                this.st.mainClass = Animation;
+            }
+        },
+        midClick: true // allow opening popup on middle mouse click. Always set it to true if you don't provide alternative source.
+    });
+});
+
+
+function popupGallery() {
+    $('.popup_gallery').each(function (i, v) {
+        $(this).magnificPopup({
+            delegate: 'a',
+            type: 'image',
+            closeOnContentClick: false,
+            closeBtnInside: false,
+            mainClass: 'mfp-with-zoom mfp-img-mobile',
+            image: {
+                verticalFit: true,
+                titleSrc: function (item) {
+                    return item.el.attr('title');
+                }
+            },
+            gallery: {
+                enabled: true
+            },
+            zoom: {
+                enabled: true,
+                duration: 300, // don't forget to change the duration also in CSS
+                opener: function (element) {
+                    return element.find('img');
+                }
+            }
+
+        });
+    });
+
+}
+
+// Controlar Cambio de Version
+(function () {
+    if (Cookies.get('bs-ignore-version-change') == 1) {
+        return;
+    }
+
+    setTimeout(function () {
+        $("#version-box").fadeOut(500);
+    }, 15000);
+
+    var acceptedLanguages = [];
+    navigator.language.split(',').forEach(function (lang) {
+        lang.split('-').forEach(function (iso) {
+            acceptedLanguages.push(iso.toLowerCase());
+        });
+    });
+
+    if (
+        acceptedLanguages.length >= 1
+        && !acceptedLanguages.includes($(".combo-lng").attr("attr-lang-selected"))
+    ) {
+        $("#allowed-versions a").each(function (e, version) {
+            if ( $(version).attr("data-language") && acceptedLanguages.includes($(version).attr("data-language") )
+            ) {
+                var langId = $(version).attr("data-language");
+                $("#version-box-msg-" + langId).removeClass("hidden");
+                $("#version-box-link-" + langId).attr("href", $(version).attr("href"));
+                $("#version-box-link-" + langId).removeClass("hidden");
+
+                $("#version-box").fadeIn(650);
+                return;
+            }
+        });
+    }
+})();
+
+let timeOutMatchLink = setTimeout(function () {
+    clearInterval(checkExistenceMatchLink);
+}, 2000);
+
+let checkExistenceMatchLink = setInterval(function () {
+    if (document.getElementsByClassName('match-link')?.length > 0) {
+        updateLiveResults();
+        clearTimeout(timeOutMatchLink);
+        clearInterval(checkExistenceMatchLink);
+    }
+}, 200)
+
+function updateLiveResults(force = 0) {
+
+    if (updateLivescoresLastCheck !== null && (Date.now() - updateLivescoresLastCheck) < REFRESH_TIME && force === 0) {
+        return false;
+    }
+    updateLivescoresLastCheck = Date.now();
+
+    if (
+        typeof document.visibilityState !== 'undefined'
+        && document.visibilityState === 'hidden'
+    ) {
+        return false;
+    }
+
+    if ($(".match-link").length) {
+
+        // - Comprobar que haya posibles partidos en directo
+        // - TODO: Que no sea un partido aplazado
+
+        var currentDate = new Date();
+        var matchDate;
+        var checkLiveMatches = false;
+
+        $(".match-link").each(function (k, item) {
+            matchDate = new Date($(item).attr("starttime"));
+            dateMinutesDiff = (matchDate - currentDate) / 1000 / 60;
+            if (dateMinutesDiff > -180 && dateMinutesDiff < 5) {
+                checkLiveMatches = true;
+                return;
+            }
+        });
+
+        if (checkLiveMatches) {
+            $.ajax({
+                type: "GET",
+                url: "/ajax/live",
+                dataype: 'json',
+                success: function (data) {
+
+                    if (typeof data.matches != 'undefined') {
+                        updateScoreLiveResults(data.matches);
+                    }
+
+                    setTimeout(function () {
+                        updateLiveResults();
+
+                        if ($('#match_id').length && $('#token').length && data.matches[$('#match_id').val()].token != $('#token').val()) {
+                            $('#token').val(data.matches[$('#match_id').val()].token);
+                            updateMatchEvents();
+                        }
+                    }, REFRESH_TIME);
+                },
+                error: function (data) {
+                    // console.error("Get Error");
+                }
+            });
+        }
+    }
+}
+
+function updateMatchEvents(token) {
+    if ($("#mod_events").length || $('#mod_stats').length) {
+
+        var checkLiveMatch = false;
+
+        $(".match-link").each(function (k, item) {
+            if ($(item).data('status') != -1 && $(item).data('status') != 1 && $(item).data('status') != 2) {
+                checkLiveMatch = true;
+                return;
+            };
+        });
+
+        if (checkLiveMatch) {
+
+            let id = document.querySelector('.match-link[starttime]')
+            if (id) {
+                id = id.getAttribute('id');
+            }
+
+            $.ajax({
+                type: "GET",
+                url: "/ajax/events",
+                dataype: 'json',
+                data: { id: id },
+                success: function (data) {
+                    data = JSON.parse(data);
+
+                    if ($("#mod_events").length) {
+                        document.getElementById('mod_events').innerHTML = data.events
+                        $('#orderEvents').on('click', checkOrderEvents);
+                    }
+
+                    if ($('#mod_stats').length) {
+                        document.getElementById('mod_stats').innerHTML = data.stats
+                    }
+                },
+                error: function (data) {
+                    // console.error("Get Error");
+                }
+            });
+        }
+    }
+}
+
+function toggleOpacity(elementId, newResult) {
+    let element = document.querySelector(elementId);
+    element.innerHTML = newResult;
+    element.animate([{ opacity: 1 }, { opacity: 0 }, { opacity: 1 }, { opacity: 0 }, { opacity: 1 }], 4000);
+}
+
+
+function updateScoreLiveResults(matches) {
+
+    $.each(matches, function (k, match) {
+        if ($("#match-" + match.id).length) {
+            // Current Status
+            var current_status = $.trim($("#match-" + match.id).attr("data-status")) || null;
+            var r1 = $.trim($("#match-" + match.id + " .r1").text()) || 0;
+            var r2 = $.trim($("#match-" + match.id + " .r2").text()) || 0;
+            var p1 = $.trim($("#match-" + match.id + " .p1").text()) || 0;
+            var p2 = $.trim($("#match-" + match.id + " .p2").text()) || 0;
+            var header = $("#match-" + match.id + " div.marker div:first").length;
+            var minute = (header) ? $.trim($("#match-" + match.id + " .date").text().split("'")[0]) || null
+                : $("#match-" + match.id + " span.tag-nobg>b").text().replace("'", "") || null;
+            var status_labels = $("#matches_attr").attr("data-status" + match.status) || null;
+            var status = $("#status_attr").attr("data-status" + match.status) || $("#status_attr").attr("data-live");
+            var status_class = getMatchStatusClass(match.status, header);
+            var marker_class = getMarkerClass(match.status);
+            var minute_label = match.minute == null ? "Live" : match.minute + "'";
+            var locale = $.trim($("#match-" + match.id).attr("locale")) || null;
+            dayjs.locale(locale);
+            var date = dayjs($.trim($("#match-" + match.id).attr('starttime')));
+
+            // 1. Sin comenzar (-1) -> Comenzado (0)
+            if (current_status == -1 && match.r1 != null && match.r2 != null) {
+
+                // Set Status First Time (Minute)
+                if (match.status == 0) {
+                    if ($("#match-" + match.id + " div.match-status-label").length) {
+                        $("#match-" + match.id + " div.match-status-label").html(
+                            '<span class="tag live"><b>' + minute_label + '</b></span>'
+                        );
+                    } else {
+                        $("#match-" + match.id + " div.date").html('');
+                    }
+                }
+            }
+
+            // when status change
+            if (match.status != current_status && match.status !== null) {
+
+                // if match is not postponed, put marker
+                if (match.status !== 2) {
+                    if (header) {
+                        $('.marker .data').html('<span class="r1">' + r1 + '</span> - <span class="r2">' + r2 + '</span>');
+                    } else {
+                        $('#match-' + match.id + ' .marker').html('<span class="r1 ">' + r1 + '</span>-<span class="r2">' + r2 + '</span>');
+                    }
+                }
+
+                // Add marker class
+                if (header) {
+                    $("#match-" + match.id + " div.marker").removeClass(["color-green", "match-apl"]).addClass(marker_class);
+                    $("#match-" + match.id + " div.marker div.data").removeClass(["color-green", "match-apl"]).addClass(marker_class);
+                } else {
+                    $("#match-" + match.id + " div.marker").removeClass(["color-green", "match-apl"]).addClass(marker_class);
+                }
+
+                // Add date/tag class (minute, apl. , desc. ...)
+                if (header) {
+                    if (match.status == 2 || match.status == 0 || match.status == 5) {
+                        $("#match-" + match.id + " div.tag").removeClass(["live", "end", "apl", "pror", "desc"]).addClass(status_class).html(status);
+                        $("#match-" + match.id + " div.date").html('');
+                    } else {
+                        $("#match-" + match.id + " div.tag").removeClass(["live", "end", "apl", "pror", "desc"]).addClass(status_class).html(status);
+                        $("#match-" + match.id + " div.date").html('');
+
+                    }
+                } else if (status_labels != null) {
+                    $("#match-" + match.id + " span.tag").removeClass(["live", "end", "apl"]).addClass(status_class).html("<b>" + status_labels + "</b>");
+                } else {
+                    (match.status == -1)
+                        ? $("#match-" + match.id + " div.match-status-label").html("")
+                        : $("#match-" + match.id + " div.match-status-label").html(
+                            '<span class="tag live"><b>' + minute_label + '</b></span>'
+                        );
+                }
+
+                $("#match-" + match.id).attr("data-status", match.status);
+
+
+                // If match has finished, change minute per date
+                if ((match.status === 1 || match.status === 2) && header) {
+                    $("#match-" + match.id + " div.date").html(date.format('DD MMM YYYY. HH:mm').toUpperCase());
+                }
+            }
+
+            // Change if match has started
+            if (match.status != -1) {
+                if (match.r1 != null && match.r2 != null) {
+                    if (match.r1 == r1 && match.r2 == r2 && (match.p1 != null && match.p2 != null)) {
+                        if ( match.status === 4 && ( p1 === 0 || p2 === 0 ) ) {
+                            $("#match-" + match.id + " .marker").html(printPenalties(match.r1, match.r2, match.p1, match.p2));
+                        }
+                        if ( $("#match-" + match.id + " .marker .p1").length > 0 && match.p1 != p1 && match.p1 !== null) {
+                            toggleOpacity("#match-" + match.id + " .marker .p1", match.p1);
+                        }
+                        if ( $("#match-" + match.id + " .marker .p2").length > 0 && match.p2 != p2 && match.p1 !== null) {
+                            toggleOpacity("#match-" + match.id + " .marker .p2", match.p2);
+                        }
+                    }
+                    if (match.r1 != r1) {
+                        toggleOpacity("#match-" + match.id + " .marker .r1", match.r1);
+                    }
+                    if (match.r2 != r2) {
+                        toggleOpacity("#match-" + match.id + " .marker .r2", match.r2);
+                    }
+                }
+                // Change winner team to bold
+                if (match.r1 > match.r2) {
+                    $("#match-" + match.id + " .team_left").addClass("winner");
+                    $("#match-" + match.id + " .team_right").removeClass("winner");
+                } else if (match.r1 < match.r2) {
+                    $("#match-" + match.id + " .team_right").addClass("winner");
+                    $("#match-" + match.id + " .team_left").removeClass("winner");
+                } else if (match.r1 == match.r2) {
+                    $("#match-" + match.id + " .team_left").removeClass("winner");
+                    $("#match-" + match.id + " .team_right").removeClass("winner");
+                }
+            }
+
+            // Update Minute
+            if ( match.minute != null && (match.minute != minute || match.extraMinute != null) && match.minute > 0 && [0,3].indexOf(match.status) != -1 ) {
+                let extraMinute = match.extraMinute != null ? '+'+match.extraMinute : '';
+                if ( header ) {
+                    $("#match-"+match.id+" .date.header-match-date").text(match.minute+"'"+extraMinute+" ");
+                    $("#match-"+match.id+" .match-status-label > .tag.live").text(match.minute+"'"+extraMinute+" ");
+                } else {
+                    $("#match-" + match.id + " .tag-nobg > b").html(match.minute + "'" + extraMinute);
+                }
+            }
+        }
+    });
+}
+
+function printPenalties(r1, r2, p1, p2) {
+    return '<span class=" small">' +
+                '<span class="r1"><small>' + r1 + '</small></span> ' +
+                ' (<span class="p1">' + p1 + '</span>-<span class="p2">' + p2 + '</span>) ' +
+                '<span class="r2"><small>' + r2 + '</small></span>' +
+            '</span>';
+}
+
+function changeSquad(select, value, teamId) {
+    if ($("#mod_squad").length) {
+
+        if (select === 'competition') {
+            params = {
+                teamId: teamId,
+                competition: value,
+            }
+        } else {
+            params = {
+                teamId: teamId,
+                competition: $('#competition').val(),
+                season: value,
+            }
+        }
+
+        $.ajax({
+            type: "GET",
+            url: "/ajax/teamSquad",
+            data: params,
+            success: function (data) {
+                data = JSON.parse(data);
+                $('#mod_squad').html(data.squad);
+                $('#mod_featuredSquad').html(data.featured ?? '');
+                $('#mod_loan_playersin').html(data.loan_in ?? '');
+                $('#mod_loan_playersout').html(data.loan_out ?? '');
+                $('#mod_participated_players').html(data.participated ?? '');
+                reloadMasonry();
+                tabs();
+            },
+            error: function (data) {
+                console.error("Get Error");
+            }
+        });
+    }
+}
+
+function changeRound(round, match_id, isCompetition) {
+    if ($("#mod_competitionRounds").length) {
+        $.ajax({
+            type: "GET",
+            url: "/ajax/rounds",
+            dataype: 'json',
+            data: { id: match_id, round: round, league: $('#league').val(), group: $('#group').val(), year: $('#year').val(), isCompetition: isCompetition, competition: $('#competition').val() },
+            success: function (data) {
+                $('#mod_competitionRounds').html(data);
+                refreshDateMatch();
+            },
+            error: function (data) {
+                console.error("Get Error");
+            }
+        });
+    }
+}
+
+function changeMatches(select, value, itemId, cook = '') {
+    if ($("#mod_matches").length) {
+
+        if (select === 'competition') {
+            params = {
+                teamId: itemId,
+                competition: value,
+            }
+
+            let seasonSelect = document.querySelector('#season option:checked');
+            if (seasonSelect && Number.isInteger(parseInt(seasonSelect.value))) {
+                params['season'] = seasonSelect.value;
+            }
+
+
+        } else {
+            params = {
+                teamId: itemId,
+                competition: cook === '' ? $('#competition').val() : cook,
+                season: value,
+            }
+        }
+
+        $.ajax({
+            type: "GET",
+            url: "/ajax/changeMatches",
+            data: params,
+            success: function (data) {
+                data = JSON.parse(data);
+
+                if (data.select) {
+                    let selector = document.getElementById('season');
+                    if (selector) {
+                        selector.innerHTML = data.select;
+                    }
+                }
+
+                $('#panels').html(data.matches);
+                scrollToMatch();
+                refreshDateMatch();
+            },
+            error: function (data) {
+                console.error("Get Error");
+            }
+        });
+    }
+}
+
+function changeRanking(req, type, id, group = '-1') {
+    if ($("#mod_ranking").length) {
+        if (req == 'competition_ranking_type') {
+            year = $('#season').val();
+        }
+
+        $.ajax({
+            type: "POST",
+            url: "/ajax/changeRanking",
+            dataype: 'json',
+            data: { req: req, type: type, id: id, group: group, year: $('#season').val() },
+            success: function (data) {
+                $('#mod_ranking').html(data);
+                pageScroll = 1;
+
+                //Reiniciar scroll
+                lastLimit = 0;
+                endItems = false;
+                tabSliders();
+            },
+            error: function (data) {
+                console.error("Get Error");
+            }
+        });
+    }
+}
+
+function updateMatchesSelect() {
+    if (getCookieByName('clickedTrajectoryComp') != '') {
+        if (window.innerWidth > 1023) {
+            document.getElementById('comp').value = getCookieByName('clickedTrajectoryComp');
+
+            if (document.getElementById('sea').value != getCookieByName('clickedTrajectoryYear')) {
+
+                document.getElementById('sea').value = getCookieByName('clickedTrajectoryYear');
+                document.getElementById('sea').dispatchEvent(new Event('change'));
+                setCookie('clickedTrajectoryYear', '', -1);
+            } else {
+                document.getElementById('competition').dispatchEvent(new Event('change'));
+            }
+
+            setCookie('clickedTrajectoryComp', '', -1);
+        } else {
+            document.getElementById('competition').value = getCookieByName('clickedTrajectoryComp');
+
+            if (document.getElementById('season').value != getCookieByName('clickedTrajectoryYear')) {
+
+                document.getElementById('season').value = getCookieByName('clickedTrajectoryYear');
+                document.getElementById('season').dispatchEvent(new Event('change'));
+                setCookie('clickedTrajectoryYear', '', -1);
+            } else {
+                document.getElementById('competition').dispatchEvent(new Event('change'));
+            }
+
+            setCookie('clickedTrajectoryComp', '', -1);
+        }
+
+    }
+}
+
+function changeBest(id, year, group) {
+    $.ajax({
+        type: "GET",
+        url: "/ajax/best_eleven",
+        dataype: 'json',
+        data: { id: id, year: year, group: group, round: $('#best').val() },
+        success: function (data) {
+            $('#field').html(data);
+        },
+        error: function (data) {
+            console.error("Get Error");
+        }
+    });
+}
+
+$('.changeTransfersMobile, .changeTransfersDesktop').on('change', function () {
+    var itemId = $(this).data('team');
+    var order = $(this).val();
+    var type = $('li.active').data('type');
+
+    $.ajax({
+        type: "GET",
+        url: "/ajax/changeTransfers",
+        dataype: 'json',
+        data: { id: itemId, order: order, type: type },
+        success: function (data) {
+            $('#panels').html(data);
+        },
+        error: function (data) {
+            console.error("Get Error");
+        }
+    });
+})
+
+function changeTransfersType(itemID, device = '') {
+    var itemId = itemID;
+    var type = (device != 'mobile') ? $('.select-desktop #typeSelect').val() : $('.no-desktop #typeSelect').val();
+    var order = (device != 'mobile') ? $('.select-desktop #orderSelect').val() : $('.no-desktop #orderSelect').val();
+
+    $.ajax({
+        type: "GET",
+        url: "/ajax/changeTransfers",
+        dataype: 'json',
+        data: { id: itemId, type: type, order: order},
+        success: function (data) {
+            $('#transfers-panel').html(data);
+        },
+        error: function (data) {
+            console.error("Get Error");
+        }
+    });
+}
+
+function changeCompetitionTransfers(itemID, year) {
+    var itemId = itemID;
+    var year = year;
+    var team = $('#teamSelect').val() ;
+    var order = $('#orderSelect').val();
+
+    $.ajax({
+        type: "GET",
+        url: "/ajax/changeCompetitionTransfers",
+        dataype: 'json',
+        data: { id: itemId, year : year, team: team, order: order},
+        success: function (data) {
+            $('#transfers-panel').html(data);
+        },
+        error: function (data) {
+            console.error("Get Error");
+        }
+    });
+}
+
+function changeLatestTransfers(device = '', official = null) {
+
+    var active_official = (device != 'mobile')
+                            ? document.querySelector('.select-desktop .panel-tab .tab.active a').getAttribute('data-official') 
+                            : document.querySelector('.panel-tab .tab.active a').getAttribute('data-official');
+
+    if(active_official === null || active_official != official){
+
+        if(official !== null && active_official != official){
+            (device != 'mobile') ? document.querySelector('.select-desktop #official-tab').classList.toggle('active') : document.querySelector('#official-tab').classList.toggle('active');
+            (device != 'mobile') ? document.querySelector('.select-desktop #rumours-tab').classList.toggle('active') : document.querySelector('#rumours-tab').classList.toggle('active');
+        }else{
+            updateFilterText();
+        }
+
+        official = official !== null ? official : active_official;
+
+        var top = (device != 'mobile') ? $('.select-desktop #topSelect').val() : $('.no-desktop #topSelect').val();
+
+        var budgets = [];
+        var budget_type = 'all';
+
+        $('.multiselect_filter:checked').each(function() {
+            budgets.push($(this).attr('id'));
+        });
+
+        if(budgets.length !== 0){
+            budget_type = budgets.join(',');
+        }
+
+        $.ajax({
+            type: "GET",
+            url: "/ajax/changeLatestTransfers",
+            dataype: 'json',
+            data: { top: top, budget_type: budget_type, official: official },
+            success: function (data) {
+                var response = JSON.parse(data);
+                $('#transfers-panel').html(response.html);
+                $('h1.mr10').html(response.seo_title);
+            },
+            error: function (data) {
+                console.error("Get Error");
+            }
+        });
+    }
+    
+}
+
+function updateFilterText() {
+    const numChecked = $(".multiselect_filter:checked").length;
+    $("#multiselect_filter_desktop").text( $("#multiselect_filter_desktop").text().replace(/\(\d+\)/, '(' + numChecked + ')'));
+    $("#multiselect_filter_mobile").text( $("#multiselect_filter_mobile").text().replace(/\(\d+\)/, '(' + numChecked + ')'));
+}
+
+$("input[type='checkbox']").on("change", updateFilterText);
+
+$(document).ready(function() {
+    updateFilterText();
+});
+
+function getMarkerClass(status) {
+    switch (status) {
+        case 0:
+        case 3:
+        case 4:
+        case 5:
+            return "color-green";
+        case 2:
+            return "match-apl";
+        case -1:
+            return "color-grey2";
+        case 1:
+            return "header-match-date";
+        default:
+            return '';
+    }
+}
+
+function getMatchStatusClass(status, header) {
+    switch (status) {
+        case 3:
+            if (header) return 'pror';
+        case 5:
+        case 0:
+        case 4:
+            return 'live';
+        case 1:
+            return 'end';
+        case 2:
+            return 'apl';
+        default:
+            return '';
+    }
+}
+
+(function () {
+    if (document.getElementsByClassName('dugout-video').length > 0) {
+        var dugoutCheck = setInterval(function () {
+            if (typeof window.dugout != "undefined" && typeof window.dugout[0] != "undefined") {
+                if (typeof window.dugout[0].video != "undefined") {
+                    window.dugout[0].outer.closest('.video-wrapper').classList.remove('hidden');
+                    clearInterval(dugoutCheck);
+                }
+            }
+        }, 1000);
+        setTimeout(function () {
+            clearInterval(dugoutCheck);
+        }, 10000);
+    }
+})();
+
+
+changeLink = () => {
+    $vWidth = $(window).width();
+    home = $('.menu_url').attr('url_home');
+    euro = $('.menu_url').attr('url_euro');
+    if ($vWidth < 1024) {
+        $('.menu_url').attr("href", home);
+    } else {
+        $('.menu_url').attr("href", home);
+    }
+}
+$(document).ready(function () {
+    changeLink();
+});
+$(window).on("resize", function () {
+    changeLink();
+});
+
+$('#location_select').on('change', function () {
+    var id = $('#location_select').val();
+
+    $('.location-table').each(function () {
+        $(this).attr('hidden', 'hidden');
+    })
+
+    $('#table_' + id).attr('hidden', false);
+
+    $('.location-link').each(function () {
+        $(this).attr('hidden', 'hidden');
+    })
+
+    $('#link_' + id).attr('hidden', false);
+})
+
+/* AVISOS LEGALES */
+let navLis = document.querySelectorAll(".sidebar-legal .menu li");
+let submenus = document.querySelectorAll(".sidebar-legal .submenu");
+let navLinks = document.querySelectorAll(".sidebar-legal .menu li a");
+
+//Cuando se pulsa un elemento con hermano submenu, lo abro y cierro los demás
+document.querySelectorAll('.sidebar-legal .menu li a').forEach(function (elem) {
+    elem.addEventListener('click', function (e) {
+        let parent = elem.parentNode;
+        if (parent.nextElementSibling) {
+            let sibling = parent.nextElementSibling;
+            if (parent.parentNode.classList.contains('menu') && sibling.classList.contains('submenu')) {
+                submenus.forEach((el) => el.classList.add('hidden'));
+                sibling.classList.remove('hidden');
+            }
+        }
+    });
+});
+
+window.addEventListener("scroll", event => {
+    let fromTop = window.scrollY;
+    navLis.forEach((el) => el.classList.remove('active'));
+
+    //Marco el elemento que en ese momento esté en la parte superior de la página
+    navLinks.forEach(link => {
+        let section = document.querySelector(link.hash);
+
+        if (section.offsetTop <= fromTop &&
+            section.offsetTop + section.offsetHeight > fromTop) {
+            link.parentNode.classList.add("active");
+        }
+
+        //Abro el menu del elemento activo
+        let actives = document.querySelectorAll('.sidebar-legal .menu .active');
+        actives.forEach((el) => {
+            submenus.forEach((el) => el.classList.add('hidden'));
+            el.parentNode.classList.remove('hidden');
+        });
+    });
+});
+
+$('.bet_ads_banner_1').ready(function () {
+    $vWidth = $(window).width();
+    if ($vWidth < 1024) {
+        $('#bet_ads_banner_1').hide();
+    } else {
+        $('#bet_ads_banner_2').hide();
+    }
+});
+
+$('#bet_marker .math-btn').click(function (e) {
+    e.preventDefault();
+    var side = $(this).attr('data-side');
+    var value = parseInt($('#bet_marker .' + side + '_vote').text());
+    var valueNow = value + ($(this).hasClass('plus') ? 1 : -1);
+    $('#bet_marker .' + side + '_vote').text(valueNow >= 0 ? valueNow <= 90 ? valueNow : 90 : 0);
+});
+
+$('.minus, .plus').on('click', function () {
+    var odds = JSON.parse($('.odds_div').text());
+    var score = $('.local_vote').text() + ':' + $('.visitor_vote').text()
+
+    $('#bet_marker .small-ico').removeClass('event-7');
+    $('#bet_marker .small-ico').removeClass('event-10');
+
+    for (let index = 0; index < odds.length; index++) {
+        if (odds[index]['odd_name'] == score) {
+            $('#bet_marker .price').text(odds[index]['quota_value']);
+
+            if (odds[index]['quota_value'] < odds[index]['last_quota_value']) {
+                $('#bet_marker .small-ico').addClass('event-10');
+            } else if (odds[index]['quota_value'] > odds[index]['last_quota_value']) {
+                $('#bet_marker .small-ico').addClass('event-7');
+            }
+            break;
+        }
+
+    }
+
+    if (!$('#bet_marker .small-ico').hasClass('event-10') && !$('#bet_marker .small-ico').hasClass('event-7')) {
+        $('#bet_marker .small-ico').addClass('event-10');
+    };
+
+    $('.plus[data-side=local]').removeClass('disabled');
+    $('.plus[data-side=visitor]').removeClass('disabled');
+    $('.minus[data-side=local]').removeClass('disabled');
+    $('.minus[data-side=visitor]').removeClass('disabled');
+
+
+    var minValueLocal = $('#minValueLocal').val();
+    var minValueVisitor = $('#minValueVisitor').val();
+    var limitScoreLocal = (parseInt($('.local_vote').text()) + 1) + ':' + $('.visitor_vote').text()
+    var limitScoreVisitor = $('.local_vote').text() + ':' + (parseInt($('.visitor_vote').text()) + 1);
+    var blockLocal = true;
+    var blockVisitor = true;
+
+    for (let index = 0; index < odds.length; index++) {
+        if (odds[index]['odd_name'] == limitScoreLocal) {
+            blockLocal = false;
+        }
+        if (odds[index]['odd_name'] == limitScoreVisitor) {
+            blockVisitor = false;
+        }
+
+    }
+
+    if ($('.local_vote').text() == minValueLocal) {
+        $('.minus[data-side=local]').addClass('disabled');
+    };
+    if (blockLocal) {
+        $('.plus[data-side=local]').addClass('disabled');
+    };
+
+    if ($('.visitor_vote').text() == minValueVisitor) {
+        $('.minus[data-side=visitor]').addClass('disabled');
+    };
+    if (blockVisitor) {
+        $('.plus[data-side=visitor]').addClass('disabled');
+    };
+})
+function changeCompetition(itemId, catid) {
+    $.ajax({
+        type: "GET",
+        url: "/ajax/changeCompetition",
+        dataype: 'json',
+        data: { id: itemId, cid: catid, rand: Math.random() },
+        success: function (data) {
+            data = JSON.parse(data);
+
+            let competitions = document.getElementById('mod_competitions');
+            competitions.innerHTML = '';
+
+            let competitionInfo = document.getElementById('mod_competition_info');
+            competitionInfo.innerHTML = '';
+
+            let competitionMatches = document.getElementById('mod_next_match');
+            competitionMatches.innerHTML = '';
+
+            let competitionStreak = document.getElementById('mod_streak');
+            competitionStreak.innerHTML = '';
+
+
+            if (data['competitions'] && data['competitions'].length > 0) {
+                competitions.innerHTML = data['competitions'];
+            }
+            if (data['competition_info'] && data['competition_info'].length > 0) {
+                competitionInfo.innerHTML = data['competition_info'];
+            }
+            if (data['next_match'] && data['next_match'].length > 0) {
+                competitionMatches.innerHTML = data['next_match'];
+            }
+            if (data['streak'] && data['streak'].length > 0) {
+                competitionStreak.innerHTML = data['streak'];
+            }
+            reloadMasonry();
+            tabSliders();
+        },
+        error: function (data) {
+            // console.error("Get Error");
+        }
+    });
+}
+
+//Para que se vea el footer en las páginas con menú inferior
+$(document).ready(function () {
+    if ($('.fixed-menu.bottom').length > 0) {
+        $('.footer').addClass('custom-footer');
+    }
+});
+
+function scrollToMatch() {
+    if ($("#scrollHere").length) {
+        window.scrollTo({ left: 0, top: $("#scrollHere").offset().top - 150, behavior: "instant" });
+    }
+}
+
+//VIDEO DUGOUT - DESCOMENTAR SI SE QUIERE VOLVER A PONER LOS VÍDEOS FIJOS CUANDO SE HAGA SCROLL
+/*let elementPosition = $('#videoWrapper').offset();
+let closeDugoutVideo = false;
+$(window).scroll(function(){
+    if(!closeDugoutVideo) {
+        if($(window).scrollTop() > elementPosition.top){
+            $('#videoWrapper .dugout-video').addClass('video-fixed');
+            $('.content').addClass('video-content-fixed');
+            closeDugoutVideo = false;
+        } else {
+            $('#videoWrapper .dugout-video').removeClass('video-fixed');
+            $('.content').removeClass('video-content-fixed');
+            $grid = $('.grid-container').masonry();
+            $grid.masonry('reloadItems');
+        } 
+    }   
+});
+
+$(document).ready(function(){
+    $('#videoWrapper .close').click(function() {
+        $('#videoWrapper .dugout-video').removeClass('video-fixed');
+        $('.content').removeClass('video-content-fixed');
+        closeDugoutVideo = true;
+    });
+    setTimeout(function () {
+        $('#videoWrapper .close').css('display', 'block');
+    }, 6000);
+});*/
+
+/* ORDENAR COLUMNAS EN LA TABLA DE PREDICCIÓN */
+function sortTable(n, event) {
+
+    var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+    table = document.getElementById("predictionTable");
+
+    $('table .prob-head a').removeClass('bold');
+    $('table .prob-head a .triangle').removeClass('black');
+    $('table .prob-head a .triangle').addClass('dark');
+
+    event.target.classList.add('bold');
+    $(event.target).find('.dashed-arrow .triangle').removeClass('dark');
+    $(event.target).find('.dashed-arrow .triangle').addClass('black');
+
+    switching = true;
+    //Set the sorting direction to ascending:
+    dir = "asc";
+    /*Make a loop that will continue until no switching has been done:*/
+    while (switching) {
+        //start by saying: no switching is done:
+        switching = false;
+        rows = table.rows;
+        /*Loop through all table rows (except the first, which contains table headers):*/
+        for (i = 1; i < (rows.length - 1); i++) {
+            //start by saying there should be no switching:
+            shouldSwitch = false;
+            /*Get the two elements you want to compare, one from current row and one from the next:*/
+            x = rows[i].getElementsByTagName("TD")[n];
+            y = rows[i + 1].getElementsByTagName("TD")[n];
+            /*check if the two rows should switch place, based on the direction, asc or desc:*/
+            if (dir == "asc") {
+                if (Number(x.getAttribute('data-value')) < Number(y.getAttribute('data-value'))) {
+                    //if so, mark as a switch and break the loop:
+                    shouldSwitch = true;
+                    break;
+                }
+            } else if (dir == "desc") {
+                if (Number(x.getAttribute('data-value')) > Number(y.getAttribute('data-value'))) {
+                    //if so, mark as a switch and break the loop:
+                    shouldSwitch = true;
+                    break;
+                }
+            }
+        }
+        if (shouldSwitch) {
+            /*If a switch has been marked, make the switch and mark that a switch has been done:*/
+            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+            switching = true;
+            //Each time a switch is done, increase this count by 1:
+            switchcount++;
+        } else {
+            /*If no switching has been done AND the direction is "asc", set the direction to "desc" and run the while loop again.*/
+            if (switchcount == 0 && dir == "asc") {
+                dir = "desc";
+                switching = true;
+            }
+        }
+    }
+    //Change arrow
+    if (dir == "asc") {
+        $(event.target).find('.dashed-arrow .triangle').removeClass('down');
+        $(event.target).find('.dashed-arrow .triangle').addClass('up');
+    }
+    else {
+        $(event.target).find('.dashed-arrow .triangle').removeClass('up');
+        $(event.target).find('.dashed-arrow .triangle').addClass('down');
+    }
+}
+
+/** Navegar de trayectoria equipo a partidos */
+$('.trajectory-a').on('click', function (e) {
+    var year = $(this).attr('attr-year');
+    var competition = $(this).attr('attr-competition');
+    var team = $(this).attr('attr-team');
+    var url = $(this).attr('attr-url');
+    setCookie('clickedTrajectoryComp', competition, 3600 * 24 * 15);
+    setCookie('clickedTrajectoryYear', year, 3600 * 24 * 15);
+    window.location.href = url;
+});
+
+$(document).ready(function () {
+    addImpressionBwise('imp');
+    const botones = document.querySelectorAll('.bwise');
+    botones.forEach(boton => {
+        boton.addEventListener("click", function (e) {
+            e.preventDefault();
+            addImpressionBwise('cl');
+            var enlace = window.open(boton.getAttribute('href'), '_blank');
+        });
+    });
+});
+
+/** fin trayectoria to matches */
+
+//Control de subida de avatar
+$(".edit_avatar").on('click', function () {
+    $(".file-upload").click();
+});
+
+$(".file-upload").on('change', function () {
+    var validImageTypes = ["image/gif", "image/jpeg", "image/png"];
+    if ($.inArray(this.files[0]['type'], validImageTypes) >= 0) {
+        var image = new FormData();
+        image.append('file', $(this)[0].files[0], $(this)[0].files[0].name);
+
+        $.ajax({
+            type: "POST",
+            url: "/ajax/avatarUpl",
+            data: image,
+            processData: false,
+            contentType: false,
+            success: function (data) {
+                $('#avatarMessage').removeClass('hidden');
+                popup_close();
+            }
+        });
+    }
+
+});
+
+function addImpressionBwise(type) {
+    if ($('#match_banner_bwise').length > 0) {
+        var source = $("#match_banner_bwise").attr('attr-source') ?? null;
+        var cc = $("#match_banner_bwise").attr('attr-data-cc') ?? null;
+        var params = {
+            source: source,
+            cc: cc,
+            type: type
+        };
+
+        $.ajax({
+            type: "GET",
+            url: "/ajax/trackingBwise",
+            dataype: 'json',
+            data: params,
+            success: function (data) {
+                console.log('good track');
+            }
+        });
+    }
+}
+
+//MENSAJITOS DE ALERTA
+var Alert = undefined;
+
+(function (Alert) {
+    var alert, error, info, success, warning, _container;
+    info = function (message, title, options) {
+        return alert("info", message, title, options);
+    };
+    warning = function (message, title, options) {
+        return alert("warning", message, title, options);
+    };
+    error = function (message, title, options) {
+        return alert("error", message, title, options);
+    };
+
+    success = function (message, title, options) {
+        return alert("success", message, title, options);
+    };
+    alert = function (type, message, title, options) {
+        var alertElem, messageElem, titleElem, innerElem, _container;
+        if (typeof options === "undefined") {
+            options = {};
+        }
+        options = $.extend({}, Alert.defaults, options);
+        if (!_container) {
+            _container = $("#alerts");
+            if (_container.length === 0) {
+                _container = $("<ul>").attr("id", "alerts").appendTo($("body"));
+            }
+        }
+        alertElem = $("<li>").addClass("alert").addClass("alert-" + type);
+        alertElem.addClass('open');
+
+        innerElem = $("<div>").addClass("alert-block");
+        alertElem.append(innerElem);
+        if (title) {
+            titleElem = $("<div>").addClass("alert-title").append(title);
+            innerElem.append(titleElem);
+
+        }
+        if (message) {
+            messageElem = $("<div>").addClass("alert-message").append(message);
+            innerElem.append(messageElem);
+            //innerElem.append("<em>Click to Dismiss</em>");
+
+        }
+        if (options.displayDuration > 0) {
+            setTimeout((function () {
+                leave();
+            }), options.displayDuration);
+        } else {
+            innerElem.append("<em>Click to Dismiss</em>");
+        }
+        alertElem.on("click", function () {
+            leave();
+        });
+
+        function leave() {
+            alertElem.removeClass('open');
+            alertElem.one('webkitTransitionEnd otransitionend oTransitionEnd msTransitionEnd transitionend', function () {
+                return alertElem.remove();
+            });
+        }
+        return _container.prepend(alertElem);
+    };
+    Alert.defaults = {
+        displayDuration: 3000,
+    };
+    Alert.info = info;
+    Alert.warning = warning;
+    Alert.error = error;
+    Alert.success = success;
+    return _container = void 0;
+
+})(Alert || (Alert = {}));
+
+this.Alert = Alert;
+
+$(window).on('scroll', function () {
+    if ($('#BS_DESKTOP_STICKY').length) {
+        if($(window).scrollTop() + $(window).height() > $(document).height() - 100) {
+            $('#BS_DESKTOP_STICKY_PARENT, #BS_MOBILE_STICKY_PARENT').addClass('scroll-bottom');
+        } else {
+                $('#BS_DESKTOP_STICKY_PARENT, #BS_MOBILE_STICKY_PARENT').removeClass('scroll-bottom');
+        }
+    }
+    if($('#mod_mobile_bottom_menu').length) { //si hay menú inferior fijo
+        $('#BS_MOBILE_STICKY_PARENT').addClass('scroll-bottom-menu');
+    }
+});
+
+// OTRO MENSAJITO DE APUESTAS
+/*$('#over_age').click(function() {
+    $('.banner-bet').removeClass('hidden');
+    $('.banner-bet-warning').addClass('hidden');
+});
+$('#under_age').click(function() {
+    $('.banner-bet-warning').addClass('hidden');
+});*/
+
+// NUEVOS BANNERS FIJOS CON SCROLL
+// $(document).ready(function() { 
+//     $('#mod_betBanner').addClass('banner_bet_wrapper');
+//     let offset = $(".banner_bet_wrapper").offset().top; 
+
+//     $(window).scroll(function() { 
+//         if ($(window).scrollTop() > offset) { 
+//             $(".banner_bet_wrapper").addClass("fixed"); 
+//             $('.banner_bet_wrapper').css('top', document.getElementsByClassName('header-search')[0].offsetHeight + 2);
+//         }
+//         else { 
+//             $(".banner_bet_wrapper").removeClass("fixed"); 
+//         } 
+//     });
+// });

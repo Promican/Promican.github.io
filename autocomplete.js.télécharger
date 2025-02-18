@@ -1,0 +1,329 @@
+(function(){
+
+    document.addEventListener("click", function(event) {
+        if (!event.target.closest("#search_bar")) {
+            searchAutocompleteEnds();
+            $('#search_input').blur();
+        } else {
+            if(!$("#search_input").val()) {
+                if($('#search_input').attr('lang') == 'es'){
+                    searchAutocompleteAjax('');
+                }
+            }
+            const mediaQuery = window.matchMedia('(max-width: 1199px)');
+            if (mediaQuery.matches) {
+                $('.search-container').addClass('search-mobile');
+                $('header').addClass('search-mobile');
+                $('.extra-wrapper.bottom').addClass('hidden');
+                $('.content').addClass('hidden');
+                $('.footer').addClass('hidden');
+            }
+            if($("#search_input").val()) {
+                $(document.body).addClass('search-autocomplete');
+            }
+        }
+    });
+
+    var ajax_wait;
+
+    $("#search_input").on("input paste", function(e){
+        searchAutocompleteEnds();
+        // e.preventDefault();
+        clearTimeout(ajax_wait);
+        var value = $(this).val();
+        ajax_wait = setTimeout(function() {
+            if(value.length > 0){
+                searchAutocompleteAjax(value);
+            } else {
+                if($('#search_input').attr('lang') == 'es'){
+                    searchAutocompleteAjax('');
+                }else{
+                    searchAutocompleteEnds();
+                }
+            }
+        }, 500);
+    });
+
+    function search() {
+        var keyword = input.value ?? '';
+
+        var url = "";
+
+        if (input && input.getAttribute('data-url')) {
+            url =  input.getAttribute('data-url');
+        }
+
+        keyword.replace(/[^A-Za-z0-9 ]/g,'');
+
+        var chars = {
+            "á":"a", "é":"e", "í":"i", "ó":"o", "ú":"u",
+            "à":"a", "è":"e", "ì":"i", "ò":"o", "ù":"u", "ñ":"n",
+            "Á":"A", "É":"E", "Í":"I", "Ó":"O", "Ú":"U",
+            "À":"A", "È":"E", "Ì":"I", "Ò":"O", "Ù":"U", "Ñ":"N"
+        };
+
+        var expr=/[áàéèíìóòúùñ]/ig;
+
+        keyword=keyword.replace(expr,function(e){return chars[e]});
+
+        /* Replace multi spaces with a single space */
+        keyword = keyword.replace(/\s{2,}/g,' ');
+
+        /* Replace space with a '-' symbol */
+        keyword = keyword.replace(/\s/g, "-");
+
+        var cleanUrl = url + '/' + keyword.toLowerCase();
+
+        window.location.href = cleanUrl;
+    }
+
+    function searchAutocompleteAjax(value) {
+        if(value){
+            $('#emptySearch').addClass('hidden');
+        }else{
+            $('#emptySearch').removeClass('hidden');
+        }
+
+        if (value || $('#search_input').attr('lang') == 'es') {
+            $.ajax({
+                type: "GET",
+                url: "/ajax/autocomplete",
+                dataype: 'json',
+                data: {q: value},
+                success: function(data) {
+                    if(value){
+                        $("#autocomplete_values").html(data);
+                        searchSelected();
+                    }else{
+                        $("#autocomplete_values").html('');
+                        $('#searchQuest').html(data);
+                    }
+
+                    $(document.body).addClass('search-autocomplete');
+                },
+                error: function(data) {
+                    // console.error("Get Error");
+                }
+            });
+        }
+    }
+
+    function searchAutocompleteEnds() {
+        $(document.body).removeClass('search-autocomplete');
+    }
+
+    function searchSelected() {
+        $('#autocomplete_values').scrollTop(0);
+        $('#autocomplete_values li').eq(0).addClass('selected');
+    }
+
+    function searchEmpty() {
+        $("#search_btn").removeClass('hidden');
+        $('#close_btn').addClass('hidden');
+        $('#search_svg').addClass('hidden');
+    }
+
+    $(window).keydown(function(e) {
+
+        if ($(e.target).is('#search_input')){
+
+            var li = $('#autocomplete_values li');
+            var liSelected = $('#autocomplete_values li.selected');
+
+            // Enter
+            if (e.which === 13) {
+
+                // Cancel the default action, if needed
+                e.preventDefault();
+
+                if (
+                    !$('#search_input').val().length
+                    && !$('#autocomplete_values li.selected').length
+                ) {
+                    e.preventDefault();
+                    return false;
+                } else if ($('#autocomplete_values li.selected').length > 0) {
+                    // If there is a selected value
+                    window.location.href = $('#autocomplete_values li.selected a').attr("href");
+                } else {
+                    // If not, default search
+                    search();
+                }
+
+
+            } else if (liSelected.length > 0 && [40,38].includes(e.which)) {
+
+                $('#autocomplete_values li').removeClass("selected");
+
+                if (e.which === 40) { /* FLECHA ABAJO */
+
+                    if (liSelected) {
+                        liSelected.removeClass('selected');
+                        next = liSelected.next();
+                        if(next.length > 0) {
+                            liSelected = next.addClass('selected');
+                        } else {
+                            liSelected = li.eq(0).addClass('selected');
+                        }
+                    } else {
+                        liSelected = li.eq(0).addClass('selected');
+                    }
+
+                } else if (e.which === 38) { /* FLECHA ARRIBA */
+
+                    if (liSelected) {
+
+                        liSelected.removeClass('selected');
+                        next = liSelected.prev();
+
+                        if (next.length > 0) {
+                            liSelected = next.addClass('selected');
+                        } else {
+                            liSelected = li.last().addClass('selected');
+                        }
+                    } else {
+                        liSelected = li.last().addClass('selected');
+                    }
+                }
+
+                var ulHeight = $('#autocomplete_values').height();
+                var liSelectedHeight = liSelected.height();
+                var liTop = liSelected.position().top;
+                var liPosition = 0;
+
+                for (var i=0;i<liSelected.index();i++) {
+                    liPosition += li.eq(i).height();
+                }
+
+                var isTopVisible = (liTop + liSelectedHeight) >= liSelectedHeight;
+                var isBottomVisible = (liTop + liSelectedHeight) < ulHeight;
+
+                if (!(isTopVisible && isBottomVisible)) {
+                    $('#autocomplete_values').scrollTop(liPosition);
+                }
+
+            } else {
+
+                $('#autocomplete_values li').removeClass("selected");
+
+            }
+
+            if ($('#search_input').val().length == 0) {
+                searchEmpty();
+                //location.reload();
+                //return false;
+            }
+        };
+
+        if($(e.target).is('#search_input')){
+            $("#search_btn").addClass('hidden');
+            $('#close_btn').removeClass('hidden');
+            $('#search_svg').removeClass('hidden');
+        };
+    });;
+
+    $("#close_btn").on("click", function(){
+        $('#search_input').val('');
+        searchAutocompleteEnds();
+        searchEmpty();
+        $('#search_input').focus();
+    });
+
+    $("#back_btn").on("click", function(){
+        $('#search_input').val('');
+        searchAutocompleteEnds();
+        searchEmpty();
+        $(window).scrollTop(0);
+        location.reload();
+        $('.grid').masonry();
+        $('.grid-item').masonry('reloadItems');
+        return false;
+    });
+
+    //PARA OCULTAR EL TECLADO
+    window.addEventListener('scroll', function() {
+        $('#search_input').blur();
+    });
+
+    //Búsqueda por voz
+
+    navigator.permissions
+        .query({ name: "microphone" })
+        .then((permissionStatus) => {
+            if(permissionStatus.state == 'denied'){
+                $('.search-mic').addClass('hidden');
+            }
+
+            permissionStatus.onchange = () => {
+                if(permissionStatus.state == 'granted'){
+                    $('.search-mic').removeClass('hidden');
+                }else if(permissionStatus.state == 'denied'){
+                    $('.search-mic').addClass('hidden');
+                }
+            };
+        });
+
+    function startVoiceRecognition(){
+        if (typeof webkitSpeechRecognition !== 'undefined') {
+            var SpeechRecognition = webkitSpeechRecognition
+        }
+
+        if (typeof webkitSpeechRecognitionEvent !== 'undefined') {
+            var SpeechRecognitionEvent = webkitSpeechRecognitionEvent
+        }
+
+        if (SpeechRecognition && SpeechRecognitionEvent) {
+            var recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'es-ES';
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            var recognizing = false;
+            var searchMic = document.querySelector('.search-mic');
+
+            if(!recognizing){
+                recognition.start();
+                recognizing = true;
+                var started = false;
+
+                setTimeout(function(){
+                    if(!started){
+                        _closeLoader();
+                        $('#aborted').removeClass('hidden');
+                    }
+                }, 1000)
+
+                recognition.onaudiostart = function(){
+                    _openLoader(searchMic);
+                    started = true;
+                }
+
+                recognition.onresult = function(event) {
+                    document.getElementById('search_input').value = event.results[0][0].transcript;
+                    var value = event.results[0][0].transcript;
+                    if(value.length > 2) {
+                        searchAutocompleteAjax(value);
+                    }
+                }
+                recognition.onspeechend = function() {
+                    recognition.stop();
+                    recognizing = false;
+                    _closeLoader();
+                }
+                recognition.onnomatch = function(){
+                    _closeLoader();
+                }
+                recognition.onerror = function(err) {
+                    $('#'+err.error).removeClass('hidden');
+                    _closeLoader();
+                }
+            }
+        }
+    }
+
+    $('.search-mic').on('click', function(){
+        startVoiceRecognition();
+    })
+
+})();

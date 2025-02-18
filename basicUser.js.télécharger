@@ -1,0 +1,36 @@
+const errorIdMap = {
+    1: 'badUserName',
+    2: 'badEmail',
+    3: 'badPassword',
+};
+
+const mappedError = (errorId) => errorIdMap[errorId] ?? 'badUserName';
+
+const showError = (id, text = '') => {
+    const errorElement = document.getElementById(id);
+
+    if(text){ errorElement.innerText = text; }
+    errorElement.style.color = 'red';
+    errorElement.classList.remove('hidden');
+    toggleOpacity(`#${id}`, errorElement.innerText);
+};
+
+const hideAllErrors = () => {
+    document.getElementById('badUserName')?.classList.add('hidden');
+    document.getElementById('badEmail')?.classList.add('hidden');
+    document.getElementById('badPassword')?.classList.add('hidden');
+};
+
+const closeSession = () => {
+
+    setCookie('userName', '', -1);
+    setCookie('userHash', '', -1);
+    setCookie('userAvatar', '', -1);
+    setCookie('userEmail', '', -1);
+    setCookie('userId', '', -1);
+    setCookie('lastTime', '', -1);
+    setCookie('userFavorites', '', -1);
+
+    window.location.href = '/';
+    
+};

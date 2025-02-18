@@ -1,0 +1,33 @@
+$(document).ready(function() {
+
+    if (typeof twttr !== "undefined") {
+        twttr.ready(function (twttr) {
+            twttr.events.bind(
+            'rendered',
+            function (ev) {
+                reloadMasonry();
+            });
+        });
+    }
+
+    window.__igEmbedLoaded = function(loadedItem) {
+        reloadMasonry();
+    };
+
+});
+
+window.onload = () => {
+    document.querySelectorAll('body > span').forEach((e) => {
+        e.classList.add('hidden');
+    })
+};
+
+function readingTime() {
+    const teaser = document.getElementById("mod_news_article_live").innerText;
+    const text = teaser + document.getElementById("mod_news_featured_live").innerText;
+    const wpm = 250;
+    const words = text.trim().split(/\s+/).length;
+    const time = Math.ceil(words / wpm);
+    document.getElementById("readingTime").innerText = time;
+}
+readingTime();

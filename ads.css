@@ -1,0 +1,109 @@
+.centerAds {
+    display: grid;
+    place-items: center;
+    margin-right: 0;
+    margin-bottom: 12px;
+}
+
+.centerBigAds {
+    position: relative;
+    left: -10%;
+}
+
+.sideAds {
+    position: fixed;
+}
+
+.leftAds {
+    left: 1%;
+}
+
+.rightAds {
+    right: 1%;
+}
+
+.minTopAds {
+    top: 30%;
+}
+
+#BS_MOBILE_HOME_TOP .ssm_adunit_container {
+    position: relative;
+    /*left: 4%;*/
+}
+/********/
+/*
+    Type 1 -->  Home, partidos, jornadas...
+    Type 2 -->  Eventos del partido
+*/
+.side-ads {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
+}
+.side-ads .ad-box {
+    position: absolute;
+    height: auto;
+    overflow: hidden; 
+    text-align: center;
+    pointer-events: all;
+    transition: all .5s;
+}
+.side-ads .ad-box.left {left: 0;}
+.side-ads .ad-box.right {right: 0}
+
+.side-ads.type1 .ad-box {width: calc(50% - 340px); top: 30%;}
+.side-ads.type2 .ad-box.left {width: calc(50% - 495px); top: 30%;}
+.side-ads.type2 .ad-box.right {width: calc(50% - 565px); top: 30%;}
+
+@media (min-width: 1200px) {
+    .side-ads.type1 .ad-box {width: calc(50% - 400px);}
+}
+@media(min-width: 1920px) {
+    .side-ads.type1 .ad-box {width: calc(50% - 465px);}
+    .side-ads.type2 .ad-box.left {width: calc(50% - 580px);}
+    .side-ads.type2 .ad-box.right {width: calc(50% - 665px);}
+    .centerBigAds {left: -2%}
+}
+
+@media (max-width: 1023px) {
+    #BS_DESKTOP_NEWS_TOP, #BS_DESKTOP_NEWS_MIDDLE, #BS_DESKTOP_STICKY_PARENT, #besocy_desktop { display: none };
+}
+@media (min-width: 1023px) {
+    #BS_MOBILE_NEWS_TOP, #BS_MOBILE_NEWS_MIDDLE, #BS_MOBILE_STICKY_PARENT { display: none };
+}
+.new-sticky {
+    position: fixed;
+    bottom: 0px;
+    /* z-index: 9999; */
+    width: 100vw;
+    height: 50px;
+    text-align: -webkit-center;
+}
+
+.ads-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/********/
+#BS_DESKTOP_STICKY_PARENT {
+    bottom: 0;
+    transition: all .3s ease;
+}
+#BS_DESKTOP_STICKY_PARENT.scroll-bottom {bottom: 45px;}
+#BS_MOBILE_STICKY_PARENT.scroll-bottom, #BS_MOBILE_STICKY_PARENT.scroll-bottom-menu { 
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+#BS_MOBILE_STICKY_PARENT.scroll-bottom {
+    bottom: 45px; 
+}    
+#BS_MOBILE_STICKY_PARENT.scroll-bottom-menu { /* si hay menú inferior fijo */
+    bottom: 60px;
+}
+
+#BS_DESKTOP_HOME_LEFT, #BS_DESKTOP_HOME_RIGHT {top: 9% !important;}

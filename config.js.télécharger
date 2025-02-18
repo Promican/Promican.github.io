@@ -1,0 +1,94 @@
+// hasClass
+function hasClass(elem, className) {
+    return new RegExp(' ' + className + ' ').test(' ' + elem.className + ' ');
+}
+// addClass
+function addClass(elem, className) {
+    if (!hasClass(elem, className)) {
+        elem.className += ' ' + className;
+    }
+}
+// removeClass
+function removeClass(elem, className) {
+    var newClass = ' ' + elem.className.replace( /[\t\r\n]/g, ' ') + ' ';
+    if (hasClass(elem, className)) {
+        while (newClass.indexOf(' ' + className + ' ') >= 0 ) {
+            newClass = newClass.replace(' ' + className + ' ', ' ');
+        }
+        elem.className = newClass.replace(/^\s+|\s+$/g, '');
+    }
+}
+// toggleClass
+function toggleClass(elem, className) {
+    var newClass = ' ' + elem.className.replace( /[\t\r\n]/g, " " ) + ' ';
+    if (hasClass(elem, className)) {
+        while (newClass.indexOf(" " + className + " ") >= 0 ) {
+            newClass = newClass.replace( " " + className + " " , " " );
+        }
+        elem.className = newClass.replace(/^\s+|\s+$/g, '');
+    } else {
+        elem.className += ' ' + className;
+    }
+}
+
+// Maneja el clic en el botón de "Ver más" añadiendo o eliminando la clase 'active'
+function handleViewMoreClick(e) {
+    e.preventDefault();
+
+    const parent = this.closest('.view-more');
+    if (parent) {
+        if (typeof $('.grid').masonry === 'function') {
+            reloadMasonry();
+        }
+        
+        parent.classList.toggle('active');
+    }
+}
+
+// Agrega el event listener al botón de "Ver más"
+function addClickListenerToViewMoreBtn(elem) {
+    elem.addEventListener('click', handleViewMoreClick);
+}
+
+// Carga los botones de "Ver más"
+function loadViewMoreBtn() {
+    addFunctionsToPopUp();
+    document.querySelectorAll('.view_more_btn').forEach( addClickListenerToViewMoreBtn );
+}
+
+document.querySelectorAll('.btn-more').forEach(function(elem) {
+    elem.addEventListener('click', function(e) {
+        e.preventDefault();
+        $('.grid').masonry(); //Para inicializar Masonry
+    });
+});
+
+//Loader
+    var loaderDiv = document.createElement("div");
+        loaderDiv.className = 'loader';
+        loaderDiv.innerHTML = '<div class="loaderanim">Cargando...</div>';
+    
+    var _openLoader = function(elem) {
+        elem.prepend(loaderDiv);
+        var loaderElem = loaderDiv.querySelector('.loaderanim');
+        var heightLoader = loaderElem.clientHeight;
+        var heightElem = elem.clientHeight;
+        var scale = heightElem/heightLoader;
+        loaderElem.style.transform = "scale("+(scale<1?scale:1)+")";
+    };
+
+    var _closeLoader = function() {
+        loaderDiv.remove();
+    };
+    
+
+//burger
+$("#burger").click(function(e) {
+    e.preventDefault();
+	$(document.body).toggleClass('mobile-menu-open');
+	$('#BS_MOBILE_STICKY_PARENT').toggleClass('hidden');
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadViewMoreBtn();
+})
